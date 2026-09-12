@@ -2139,10 +2139,9 @@
 		key_hall {
 			key_hall_default: key_hall_default {
 				pins = "gpio124";
-				function = "normal";
+				function = "gpio";
 				input-enable;
 				bias-pull-up;
-				power-source = <0>;
 			};
 		};
 

@@ -138,10 +138,8 @@
 		label = "gpio-keys";
 
 		pinctrl-names = "default";
-		pinctrl-0 = <&key_cam_snapshot_default
-				 &key_cam_focus_default
-				 &key_vol_up_default
-				 &key_hall_default>;
+		/* Camera shutter pins are not wired; volume-up is pm660l gpio7, not TLMM. */
+		pinctrl-0 = <&key_hall_default>;
 
 		vol_up {
 			label = "volume_up";

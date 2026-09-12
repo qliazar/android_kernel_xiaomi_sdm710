@@ -5947,7 +5947,7 @@ static int calculate_average_current(struct fg_chip *chip)
 	}
 
 unchanged:
-	pr_info("current_now_ma=%d averaged_iavg_ma=%d\n",
+	pr_debug("current_now_ma=%d averaged_iavg_ma=%d\n",
 							chip->param.batt_ma, chip->param.batt_ma_avg);
 	return chip->param.batt_ma_avg;
 }
@@ -6021,7 +6021,7 @@ static void fg_battery_soc_smooth_tracking(struct fg_chip *chip)
 			power_supply_changed(chip->batt_psy);
 	}
 
-	pr_info("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
+	pr_debug("soc:%d, last_soc:%d, raw_soc:%d, soc_changed:%d.\n",
 			chip->param.batt_soc, last_batt_soc,
 			chip->param.batt_raw_soc, soc_changed);
 }
@@ -6050,7 +6050,7 @@ static void soc_monitor_work(struct work_struct *work)
 	if (chip->soc_reporting_ready)
 		fg_battery_soc_smooth_tracking(chip);
 
-	pr_info("soc:%d, raw_soc:%d, c:%d, s:%d\n",
+	pr_debug("soc:%d, raw_soc:%d, c:%d, s:%d\n",
 			chip->param.batt_soc, chip->param.batt_raw_soc,
 			chip->param.batt_ma, chip->charge_status);
 

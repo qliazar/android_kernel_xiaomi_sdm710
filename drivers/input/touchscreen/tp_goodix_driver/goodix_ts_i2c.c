@@ -1984,7 +1984,7 @@ static int goodix_event_handler(struct goodix_ts_device *dev,
 		/* handle hotknot event */
 		ts_info("Hotknot event");
 	} else {
-		ts_info("unknow event type:%02x", event_sta);
+		ts_debug("unknow event type:%02x", event_sta);
 		r = -EINVAL;
 	}
 
