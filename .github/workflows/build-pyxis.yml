@@ -1,0 +1,180 @@
+name: Build Kernel for Mi 9 Lite (pyxis)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - lineage-22.2
+    paths-ignore:
+      - 'README.md'
+
+jobs:
+  build:
+    name: Build Kernel (pyxis)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Cache Toolchains
+        id: cache-toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            clang
+            gcc64
+            gcc32
+          key: toolchains-pyxis-clang11-gcc49-v1
+
+      - name: Set up Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libssl-dev libelf-dev \
+            zip unzip tar cpio device-tree-compiler python3 python2 \
+            git wget curl ccache
+          ccache -M 5G
+          ccache -z
+
+      - name: Download Clang Toolchain (AOSP Clang r383902b / Clang 11)
+        if: steps.cache-toolchains.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p clang
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-11.0.0_r48/clang-r383902b.tar.gz -O clang.tar.gz
+          tar -C clang/ -xzf clang.tar.gz
+          rm -f clang.tar.gz
+
+      - name: Download GCC 64-bit & 32-bit Cross-Compilers
+        if: steps.cache-toolchains.outputs.cache-hit != 'true'
+        run: |
+          rm -rf gcc64 gcc32
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc64
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc32
+
+      - name: Configure and Build Kernel
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CLANG_PATH=$(pwd)/clang/bin
+          export GCC64_PATH=$(pwd)/gcc64/bin
+          export GCC32_PATH=$(pwd)/gcc32/bin
+          export PATH="${CLANG_PATH}:${GCC64_PATH}:${GCC32_PATH}:${PATH}"
+          
+          export CROSS_COMPILE=aarch64-linux-android-
+          export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+          export CC="ccache clang"
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export USE_CCACHE=1
+          
+          OUTPUT_DIR=out
+          mkdir -p ${OUTPUT_DIR}
+          
+          echo "==> Setting up KernelSU (v0.9.5 for non-GKI 4.9)..."
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+          
+          # Append configuration options to defconfig instead of a separate config fragment if they aren't merged automatically
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          echo "CONFIG_KPROBES=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          
+          echo "==> Generating defconfig..."
+          make O=${OUTPUT_DIR} ARCH=arm64 vendor/sdm670-perf_defconfig xiaomi/sdm710-common.config xiaomi/pyxis.config
+          
+          echo "==> Building Image.gz-dtb and dtbs..."
+          make -j$(nproc --all) O=${OUTPUT_DIR} \
+            ARCH=arm64 \
+            CC="ccache clang" \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-android- \
+            CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+            Image.gz-dtb dtbs
+
+          echo "==> ccache statistics:"
+          ccache -s
+
+      - name: Prepare AnyKernel3 Flashable Zip
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+          rm -rf AnyKernel3/.git AnyKernel3/README.md
+          
+          # Create anykernel.sh correctly formatted without inner strings breaks
+          cat << 'EOF' > AnyKernel3/anykernel.sh
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+
+          properties() {
+          kernel.string=KernelSU Kernel for Xiaomi Mi 9 Lite (pyxis)
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=pyxis
+          device.name2=vela
+          }
+
+          boot_attributes() {
+          set_perm_recursive 0 0 755 644 $RAMDISK/*;
+          set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin;
+          }
+
+          BLOCK=boot;
+          IS_SLOT_DEVICE=0;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+
+          . tools/ak3-core.sh;
+
+          dump_boot;
+          write_boot;
+          EOF
+          
+          # Copy the built binary safely into AnyKernel directory
+          if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
+          elif [ -f out/arch/arm64/boot/Image.gz ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
+          else
+            echo "Error: Kernel raw image not found!" && exit 1
+          fi
+
+          if [ -f out/arch/arm64/boot/dts/qcom/sdm710.dtb ]; then
+            cp out/arch/arm64/boot/dts/qcom/sdm710.dtb AnyKernel3/dtb
+          fi
+          
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          DATE=$(date +'%Y%m%d')
+          ZIP_NAME="Kernel-pyxis-${DATE}-${SHORT_SHA}"
+          echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+
+          cd AnyKernel3
+          zip -r9 "../${ZIP_NAME}.zip" * -x README.md
+          cd ..
+
+      - name: Upload Flashable Kernel Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: Kernel-pyxis-*.zip
+          retention-days: 7
+
+      - name: Upload Kernel Image Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-raw-images
+          path: |
+            out/arch/arm64/boot/Image*
+            out/arch/arm64/boot/dts/qcom/*.dtb
+          retention-days: 7
