@@ -74,7 +74,7 @@
 #define AUDIT_DISABLED		-1
 #define AUDIT_UNINITIALIZED	0
 #define AUDIT_INITIALIZED	1
-static int	audit_initialized;
+static int	audit_initialized = AUDIT_DISABLED;
 
 #define AUDIT_OFF	0
 #define AUDIT_ON	1
@@ -1242,14 +1242,12 @@ __initcall(audit_init);
 /* Process kernel command-line parameter at boot time.  audit=0 or audit=1. */
 static int __init audit_enable(char *str)
 {
-	audit_default = !!simple_strtol(str, NULL, 0);
-	if (!audit_default)
-		audit_initialized = AUDIT_DISABLED;
-	audit_enabled = audit_default;
-	audit_ever_enabled = !!audit_enabled;
+	audit_default = AUDIT_OFF;
+	audit_initialized = AUDIT_DISABLED;
+	audit_enabled = AUDIT_OFF;
+	audit_ever_enabled = !!AUDIT_OFF;
 
-	pr_info("%s\n", audit_default ?
-		"enabled (after initialization)" : "disabled (until reboot)");
+	pr_info("%s\n", "disabled (until reboot)");
 
 	return 1;
 }
