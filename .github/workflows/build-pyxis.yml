@@ -39,11 +39,7 @@ jobs:
 
       - name: Set up Build Environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential bc bison flex libssl-dev libelf-dev \
-            zip unzip tar cpio device-tree-compiler python3 python2 \
-            git wget curl ccache
+          sudo apt-get install -y --no-install-recommends ccache device-tree-compiler || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache device-tree-compiler)
           ccache -M 5G
           ccache -z
 
@@ -76,6 +72,9 @@ jobs:
           export CC="ccache clang"
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export USE_CCACHE=1
+          export CCACHE_COMPRESS=1
+          export CCACHE_COMPRESSLEVEL=1
+          export CCACHE_MAXSIZE=5G
           
           OUTPUT_DIR=out
           mkdir -p ${OUTPUT_DIR}
@@ -93,7 +92,7 @@ jobs:
           make O=${OUTPUT_DIR} ARCH=arm64 vendor/sdm670-perf_defconfig xiaomi/sdm710-common.config xiaomi/pyxis.config
           
           echo "==> Building Image.gz-dtb and dtbs..."
-          make -j$(nproc --all) O=${OUTPUT_DIR} \
+          make -j$(( $(nproc --all) * 2 )) O=${OUTPUT_DIR} \
             ARCH=arm64 \
             CC="ccache clang" \
             CLANG_TRIPLE=aarch64-linux-gnu- \
