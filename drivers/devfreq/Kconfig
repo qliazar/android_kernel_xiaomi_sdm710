@@ -165,6 +165,15 @@ config DEVFREQ_GOV_QCOM_ADRENO_TZ
 	   governor is unlikely to be useful for other
 	   devices.
 
+config SIMPLE_GPU_ALGORITHM
+	bool "Simple GPU Algorithm for Adreno"
+	depends on DEVFREQ_GOV_QCOM_ADRENO_TZ
+	default y
+	help
+	  A simple user-configurable GPU control algorithm for the Adreno GPU series
+	  developed by Paul Reioux (Faux123). Eliminates TrustZone SCM overhead and
+	  provides tunable ramp-up threshold and laziness.
+
 config DEVFREQ_GOV_QCOM_GPUBW_MON
 	tristate "GPU BW voting governor"
 	depends on DEVFREQ_GOV_QCOM_ADRENO_TZ
