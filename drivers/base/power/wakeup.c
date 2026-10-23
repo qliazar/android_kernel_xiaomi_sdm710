@@ -19,6 +19,51 @@
 #include <trace/events/power.h>
 #include <linux/irq.h>
 #include <linux/irqdesc.h>
+#include <linux/string.h>
+
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+#include <linux/moduleparam.h>
+#include "boeffla_wl_blocker.h"
+
+bool enable_wakelock_blocker = true;
+module_param(enable_wakelock_blocker, bool, 0664);
+MODULE_PARM_DESC(enable_wakelock_blocker, "Enable / disable wakelock blocking");
+
+static int block_wakelocks_set(const char *val, const struct kernel_param *kp)
+{
+	int ret;
+	char *nl;
+
+	if (!val)
+		return -EINVAL;
+
+	ret = param_set_copystring(val, kp);
+	if (ret == 0) {
+		nl = strchr(list_wl, '\n');
+		if (nl)
+			*nl = '\0';
+		nl = strchr(list_wl, '\r');
+		if (nl)
+			*nl = '\0';
+		build_search_string(list_wl_default, list_wl);
+	}
+
+	return ret;
+}
+
+static const struct kernel_param_ops block_wakelocks_ops = {
+	.set = block_wakelocks_set,
+	.get = param_get_string,
+};
+
+static const struct kparam_string block_wakelocks_kparam = {
+	.maxlen = sizeof(list_wl),
+	.string = list_wl,
+};
+
+module_param_cb(block_wakelocks, &block_wakelocks_ops, (void *)&block_wakelocks_kparam, 0664);
+MODULE_PARM_DESC(block_wakelocks, "List of wakelocks to block");
+#endif
 
 #include "power.h"
 
@@ -554,12 +599,56 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	trace_wakeup_source_activate(ws->name, cec);
 }
 
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+static void wakeup_source_deactivate(struct wakeup_source *ws);
+
+static bool check_for_block(struct wakeup_source *ws)
+{
+	char wakelock_name[64] = {0};
+	int length;
+
+	if (wl_blocker_debug)
+		printk(KERN_INFO "Boeffla WL blocker: %s requested\n", ws ? ws->name : "NULL");
+
+	if (!enable_wakelock_blocker || !wl_blocker_active)
+		return false;
+
+	if (ws && ws->name) {
+		length = strlen(ws->name);
+		if ((length > 60) || (length < 1))
+			return false;
+
+		snprintf(wakelock_name, sizeof(wakelock_name), ";%s;", ws->name);
+
+		if (strstr(list_wl_search, wakelock_name) == NULL)
+			return false;
+
+		if (wl_blocker_debug)
+			printk(KERN_INFO "Boeffla WL blocker: %s blocked\n", ws->name);
+
+		if (ws->active) {
+			wakeup_source_deactivate(ws);
+
+			if (wl_blocker_debug)
+				printk(KERN_INFO "Boeffla WL blocker: %s killed\n", ws->name);
+		}
+
+		return true;
+	}
+
+	return false;
+}
+#endif
+
 /**
  * wakeup_source_report_event - Report wakeup event using the given source.
  * @ws: Wakeup source to report the event for.
  */
 static void wakeup_source_report_event(struct wakeup_source *ws)
 {
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	if (!check_for_block(ws)) {
+#endif
 	ws->event_count++;
 	/* This is racy, but the counter is approximate anyway. */
 	if (events_check_enabled)
@@ -567,6 +656,9 @@ static void wakeup_source_report_event(struct wakeup_source *ws)
 
 	if (!ws->active)
 		wakeup_source_activate(ws);
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	}
+#endif
 }
 
 /**
@@ -778,6 +870,11 @@ void __pm_wakeup_event(struct wakeup_source *ws, unsigned int msec)
 		goto unlock;
 	}
 
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	if (!ws->active)
+		goto unlock;
+#endif
+
 	expires = jiffies + msecs_to_jiffies(msec);
 	if (!expires)
 		expires = 1;
@@ -855,7 +952,10 @@ void pm_print_active_wakeup_sources(void)
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
 		if (ws->active) {
 			pr_info("active wakeup source: %s\n", ws->name);
-			active = 1;
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+			if (!check_for_block(ws))
+#endif
+				active = 1;
 		} else if (!active &&
 			   (!last_activity_ws ||
 			    ktime_to_ns(ws->last_time) >
