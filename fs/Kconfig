@@ -110,6 +110,13 @@ menu "Caches"
 source "fs/fscache/Kconfig"
 source "fs/cachefiles/Kconfig"
 
+config DYNAMIC_FSYNC
+	bool "Dynamic Fsync"
+	default y
+	help
+	  Dynamic Fsync disables synchronous writes while the screen is on
+	  and flushes them out when the screen is turned off or on suspend.
+
 endmenu
 
 if BLOCK
