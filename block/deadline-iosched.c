@@ -17,11 +17,10 @@
 /*
  * See Documentation/block/deadline-iosched.txt
  */
-static const int read_expire = HZ / 2;  /* max time before a read is submitted. */
-static const int write_expire = 5 * HZ; /* ditto for writes, these limits are SOFT! */
-static const int writes_starved = 2;    /* max times reads can starve a write */
-static const int fifo_batch = 16;       /* # of sequential requests treated as one
-				     by the above parameters. For throughput. */
+static const int read_expire = HZ / 10; /* 100ms: prioritize low-latency reads on flash storage */
+static const int write_expire = HZ;     /* 1000ms: lower write expiration for modern flash */
+static const int writes_starved = 4;    /* allow reads to preempt writes longer for UI responsiveness */
+static const int fifo_batch = 4;        /* reduce batching burst to prevent UI jank */
 
 struct deadline_data {
 	/*
