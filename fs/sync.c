@@ -15,6 +15,11 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/backing-dev.h>
+
+#ifdef CONFIG_DYNAMIC_FSYNC
+#include <linux/dyn_sync_cntrl.h>
+#include <linux/moduleparam.h>
+#endif
 #include "internal.h"
 
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
@@ -104,6 +109,21 @@ static void fdatawait_one_bdev(struct block_device *bdev, void *arg)
  * just write metadata (such as inodes or bitmaps) to block device page cache
  * and do not sync it on their own in ->sync_fs().
  */
+#ifdef CONFIG_DYNAMIC_FSYNC
+void sync_filesystems(int wait)
+{
+	int nowait = 0;
+
+	wakeup_flusher_threads(0, WB_REASON_SYNC);
+	iterate_supers(sync_inodes_one_sb, NULL);
+	iterate_supers(sync_fs_one_sb, &nowait);
+	iterate_supers(sync_fs_one_sb, &wait);
+	iterate_bdevs(fdatawrite_one_bdev, NULL);
+	iterate_bdevs(fdatawait_one_bdev, NULL);
+}
+EXPORT_SYMBOL(sync_filesystems);
+#endif
+
 SYSCALL_DEFINE0(sync)
 {
 	int nowait = 0, wait = 1;
@@ -157,6 +177,11 @@ SYSCALL_DEFINE1(syncfs, int, fd)
 	struct super_block *sb;
 	int ret;
 
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (likely(dyn_fsync_active && suspend_active))
+		return 0;
+#endif
+
 	if (!f.file)
 		return -EBADF;
 	sb = f.file->f_path.dentry->d_sb;
@@ -183,6 +208,11 @@ SYSCALL_DEFINE1(syncfs, int, fd)
 int vfs_fsync_range(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct inode *inode = file->f_mapping->host;
+
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (likely(dyn_fsync_active && suspend_active))
+		return 0;
+#endif
 
 	if (!file->f_op->fsync)
 		return -EINVAL;
@@ -214,6 +244,11 @@ static int do_fsync(unsigned int fd, int datasync)
 {
 	struct fd f = fdget(fd);
 	int ret = -EBADF;
+
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (likely(dyn_fsync_active && suspend_active))
+		return 0;
+#endif
 
 	if (f.file) {
 		ret = vfs_fsync(f.file, datasync);
@@ -288,6 +323,11 @@ SYSCALL_DEFINE4(sync_file_range, int, fd, loff_t, offset, loff_t, nbytes,
 	struct address_space *mapping;
 	loff_t endbyte;			/* inclusive */
 	umode_t i_mode;
+
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (likely(dyn_fsync_active && suspend_active))
+		return 0;
+#endif
 
 	ret = -EINVAL;
 	if (flags & ~VALID_FLAGS)
@@ -371,3 +411,34 @@ SYSCALL_DEFINE4(sync_file_range2, int, fd, unsigned int, flags,
 {
 	return sys_sync_file_range(fd, offset, nbytes, flags);
 }
+
+#ifdef CONFIG_DYNAMIC_FSYNC
+static int param_set_fsync_enabled(const char *val, const struct kernel_param *kp)
+{
+	bool n;
+	int ret;
+
+	ret = strtobool(val, &n);
+	if (ret)
+		return ret;
+
+	dyn_fsync_active = n;
+	if (!n)
+		dyn_fsync_force_flush();
+
+	return 0;
+}
+
+static int param_get_fsync_enabled(char *buffer, const struct kernel_param *kp)
+{
+	return scnprintf(buffer, PAGE_SIZE, "%c\n", dyn_fsync_active ? 'Y' : 'N');
+}
+
+static const struct kernel_param_ops fsync_enabled_ops = {
+	.set = param_set_fsync_enabled,
+	.get = param_get_fsync_enabled,
+};
+
+module_param_cb(fsync_enabled, &fsync_enabled_ops, NULL, 0664);
+MODULE_PARM_DESC(fsync_enabled, "File system sync enabled/disabled");
+#endif
