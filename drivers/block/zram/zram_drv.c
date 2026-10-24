@@ -40,7 +40,10 @@ static DEFINE_IDR(zram_index_idr);
 static DEFINE_MUTEX(zram_index_mutex);
 
 static int zram_major;
-static const char *default_compressor = "lzo";
+#ifndef CONFIG_ZRAM_DEF_COMP
+#define CONFIG_ZRAM_DEF_COMP "lz4"
+#endif
+static const char *default_compressor = CONFIG_ZRAM_DEF_COMP;
 
 /* Module params (documentation at end) */
 static unsigned int num_devices = 1;
@@ -468,7 +471,7 @@ static ssize_t backing_dev_store(struct device *dev,
 	unsigned long nr_pages, *bitmap = NULL;
 	struct block_device *bdev = NULL;
 	int err;
-	struct zram *zram = dev_to_zram(dev);
+	struct zram *dev_to_zram(dev);
 	gfp_t kmalloc_flags;
 
 	file_name = kmalloc(PATH_MAX, GFP_KERNEL);
@@ -1115,7 +1118,7 @@ static ssize_t mm_stat_show(struct device *dev,
 static ssize_t bd_stat_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct zram *zram = dev_to_zram(dev);
+	struct zram *dev_to_zram(dev);
 	ssize_t ret;
 
 	down_read(&zram->init_lock);

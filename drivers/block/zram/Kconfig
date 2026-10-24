@@ -14,6 +14,27 @@ config ZRAM
 
 	  See Documentation/blockdev/zram.txt for more information.
 
+choice
+	prompt "Default zram compressor"
+	default ZRAM_DEF_COMP_LZ4
+	depends on ZRAM
+
+config ZRAM_DEF_COMP_LZ4
+	bool "lz4"
+	select CRYPTO_LZ4
+
+config ZRAM_DEF_COMP_LZO
+	bool "lzo"
+	select CRYPTO_LZO
+
+endchoice
+
+config ZRAM_DEF_COMP
+	string
+	default "lz4" if ZRAM_DEF_COMP_LZ4
+	default "lzo" if ZRAM_DEF_COMP_LZO
+	default "lzo"
+
 config ZRAM_WRITEBACK
        bool "Write back incompressible or idle page to backing device"
        depends on ZRAM
