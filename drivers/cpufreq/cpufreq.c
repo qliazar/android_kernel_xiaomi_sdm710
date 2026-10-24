@@ -690,6 +690,9 @@ static int cpufreq_parse_governor(char *str_governor, unsigned int *policy,
 {
 	int err = -EINVAL;
 
+	if (!strncasecmp(str_governor, "schedutil", CPUFREQ_NAME_LEN))
+		str_governor = "ondemand";
+
 	if (cpufreq_driver->setpolicy) {
 		if (!strncasecmp(str_governor, "performance", CPUFREQ_NAME_LEN)) {
 			*policy = CPUFREQ_POLICY_PERFORMANCE;
