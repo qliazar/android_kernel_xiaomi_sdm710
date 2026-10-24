@@ -138,4 +138,6 @@ struct bpf_security_struct {
 
 extern unsigned int selinux_checkreqprot;
 
+extern u32 current_sid(void);
+
 #endif /* _SELINUX_OBJSEC_H_ */
