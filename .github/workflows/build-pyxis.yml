@@ -86,6 +86,9 @@ jobs:
           
           # Append configuration options to defconfig instead of a separate config fragment if they aren't merged automatically
           echo "CONFIG_KSU=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          echo "CONFIG_OVERLAY_FS=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          echo "CONFIG_TMPFS_XATTR=y" >> arch/arm64/configs/xiaomi/pyxis.config
+          echo "CONFIG_TMPFS_POSIX_ACL=y" >> arch/arm64/configs/xiaomi/pyxis.config
           echo "CONFIG_KPROBES=y" >> arch/arm64/configs/xiaomi/pyxis.config
           echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/xiaomi/pyxis.config
           echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/xiaomi/pyxis.config
