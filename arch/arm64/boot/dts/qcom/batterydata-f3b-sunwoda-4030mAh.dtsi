@@ -3,7 +3,7 @@ qcom,f3b_sunwoda_4030mAh {
 	/* #3905333_Xiaomi_F3B_SWD_3940mAH_PM670_FG_averaged_MasterSlave_Mar4th2019*/
 	qcom,max-voltage-uv = <4400000>;
 	qcom,fastchg-current-ma = <3000>;
-	qcom,fg-cc-cv-threshold-mv = <4390>;
+	qcom,fg-cc-cv-threshold-mv = <4400>;
 	qcom,nom-batt-capacity-mah = <4030>;
 	qcom,batt-id-kohm = <68>;
 	qcom,battery-beta = <4250>;
@@ -19,10 +19,10 @@ qcom,f3b_sunwoda_4030mAh {
 				151	450	4400000
 				451	550	4100000>;
 	qcom,dynamic-fv-ranges = <0    100  4400000
-				101  200  4380000
-				201  300  4360000
-				301  400  4340000
-				401  500  4340000>;
+				101  200  4400000
+				201  300  4380000
+				301  400  4360000
+				401  500  4360000>;
 	qcom,checksum = <0x6B47>;
 	qcom,gui-version = "PM660GUI - 0.0.0.45";
 	qcom,fg-profile-data = [

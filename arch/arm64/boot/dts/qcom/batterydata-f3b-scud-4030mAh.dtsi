@@ -4,7 +4,7 @@ qcom,f3b_scud_4030mAh {
 	/* #3918615_Xiaomi_F3B_SCUD_3940mAh_PM670_FG_averaged_MasterSlave_Mar12th2019*/
 	qcom,max-voltage-uv = <4400000>;
 	qcom,fastchg-current-ma = <3000>;
-	qcom,fg-cc-cv-threshold-mv = <4390>;
+	qcom,fg-cc-cv-threshold-mv = <4400>;
 	qcom,nom-batt-capacity-mah = <4030>;
 	qcom,batt-id-kohm = <330>;
 	qcom,battery-beta = <4250>;
@@ -20,10 +20,10 @@ qcom,f3b_scud_4030mAh {
 				151	450	4400000
 				451	550	4100000>;
 	qcom,dynamic-fv-ranges = <0    100  4400000
-				101  200  4380000
-				201  300  4360000
-				301  400  4340000
-				401  500  4340000>;
+				101  200  4400000
+				201  300  4380000
+				301  400  4360000
+				401  500  4360000>;
 	qcom,checksum = <0xAC70>;
 	qcom,gui-version = "PM660GUI - 0.0.0.45";
 	qcom,fg-profile-data = [
