@@ -21,6 +21,7 @@
 #include <linux/string.h>
 #include "dsi_drm.h"
 #include "dsi_display.h"
+#include <linux/mi_disp_compat.h>
 #include "sde_crtc.h"
 #include "sde_rm.h"
 
@@ -1781,11 +1782,15 @@ static int sde_connector_init_debugfs(struct drm_connector *connector)
 
 static int sde_connector_late_register(struct drm_connector *connector)
 {
+	if (connector->connector_type == DRM_MODE_CONNECTOR_DSI)
+		mi_disp_compat_attach_connector(connector->kdev);
 	return sde_connector_init_debugfs(connector);
 }
 
 static void sde_connector_early_unregister(struct drm_connector *connector)
 {
+	if (connector->connector_type == DRM_MODE_CONNECTOR_DSI)
+		mi_disp_compat_detach_connector(connector->kdev);
 	/* debugfs under connector->debugfs are deleted by drm_debugfs */
 }
 

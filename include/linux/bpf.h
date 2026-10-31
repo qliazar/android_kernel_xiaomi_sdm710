@@ -45,6 +45,7 @@ struct bpf_map {
 	u32 value_size;
 	u32 max_entries;
 	u32 map_flags;
+	u32 compat_id;	/* pyxis: nonzero map id for Android 15 libbpf */
 	u32 pages;
 	bool unpriv_array;
 	/* 7 bytes hole */

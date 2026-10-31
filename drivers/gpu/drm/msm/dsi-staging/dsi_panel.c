@@ -962,16 +962,26 @@ enum msm_dim_layer_type dsi_panel_update_dimlayer(struct dsi_panel *panel,
 		 * - it is not already enabled by user
 		 * - we are coming from doze mode
 		 */
-		if (!panel->hbm_enabled || panel->doze_status)
-			dsi_panel_set_hbm(panel, true);
+		if (!panel->hbm_enabled || panel->doze_status) {
+			int mi_rc = dsi_panel_set_hbm(panel, true);
+
+			pr_info("mi_disp_compat: dimlayer ->FOD hbm_user=%d doze=%d set_hbm(true) rc=%d\n",
+				panel->hbm_enabled, panel->doze_status, mi_rc);
+		} else {
+			pr_info("mi_disp_compat: dimlayer ->FOD hbm_user=%d doze=%d set_hbm skipped\n",
+				panel->hbm_enabled, panel->doze_status);
+		}
 	}
 	else if (panel->dimlayer_type == MSM_DIM_LAYER_FOD) {
 		if (!panel->doze_status) {
 			/* Switch to normal mode */
 
 			/* Switch-off HBM if it is not enabled by user */
-			if (!panel->hbm_enabled)
-				dsi_panel_set_hbm(panel, false);
+			if (!panel->hbm_enabled) {
+				int mi_rc2 = dsi_panel_set_hbm(panel, false);
+
+				pr_info("mi_disp_compat: dimlayer FOD-> set_hbm(false) rc=%d\n", mi_rc2);
+			}
 		} else {
 			/* Switch back to doze mode */
 			if (panel->hbm_enabled)

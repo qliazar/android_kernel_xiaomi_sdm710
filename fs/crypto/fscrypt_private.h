@@ -188,4 +188,8 @@ struct fscrypt_mode {
 
 extern void __exit fscrypt_essiv_cleanup(void);
 
+/* keyring_compat.c */
+extern int fscrypt_compat_get_key(const u8 *descriptor, unsigned int min_keysize,
+				  struct fscrypt_key *out);
+
 #endif /* _FSCRYPT_PRIVATE_H */

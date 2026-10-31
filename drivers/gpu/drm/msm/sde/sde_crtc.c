@@ -30,6 +30,7 @@
 #include "sde_hw_lm.h"
 #include "sde_hw_ctl.h"
 #include "sde_crtc.h"
+#include <linux/mi_disp_compat.h>
 #include "sde_plane.h"
 #include "sde_color_processing.h"
 #include "sde_encoder.h"
@@ -4696,6 +4697,16 @@ static int sde_crtc_global_dim_atomic_check(struct sde_crtc_state *cstate,
 	cstate->global_dim_layer = NULL;
 	cstate->global_dim_layer_type = MSM_DIM_LAYER_NONE;
 	cstate->global_dim_layer_alpha = 0;
+
+	if (mi_disp_compat_fod_dump()) {
+		for (i = 0; i < cnt; i++)
+			pr_info("fod-dump: plane %d stage=%u fod=%d dst=%d,%d %ux%u fb=%ux%u fmt=0x%x\n", i, pstates[i].stage,
+				sde_plane_is_fod_layer(pstates[i].drm_pstate), pstates[i].drm_pstate->crtc_x,
+				pstates[i].drm_pstate->crtc_y, pstates[i].drm_pstate->crtc_w, pstates[i].drm_pstate->crtc_h,
+				pstates[i].drm_pstate->fb ? pstates[i].drm_pstate->fb->width : 0,
+				pstates[i].drm_pstate->fb ? pstates[i].drm_pstate->fb->height : 0,
+				pstates[i].drm_pstate->fb ? pstates[i].drm_pstate->fb->pixel_format : 0);
+	}
 
 	/* First look for FOD layer if it is provided by userspace.
 	 * If so use its stage value to inject global dimming layer

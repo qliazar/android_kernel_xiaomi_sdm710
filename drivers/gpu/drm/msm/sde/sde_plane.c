@@ -35,6 +35,7 @@
 #include "sde_crtc.h"
 #include "sde_vbif.h"
 #include "sde_plane.h"
+#include <linux/mi_disp_compat.h>
 #include "sde_color_processing.h"
 #include "sde_hw_rot.h"
 
@@ -4129,7 +4130,16 @@ int sde_plane_is_fod_layer(const struct drm_plane_state *drm_state)
 
 	pstate = to_sde_plane_state(drm_state);
 
-	return sde_plane_get_property(pstate, PLANE_PROP_FOD);
+	if (sde_plane_get_property(pstate, PLANE_PROP_FOD))
+		return 1;
+
+	/* HyperOS MI-SF/SystemUI does not mark the FOD light layer with FOD_PRESSED_LAYER_ZORDER (LineageOS HWC does).
+	 * During a FOD session treat the 266x266 plane centred on the in-display sensor (gxzw_anim window) as the FOD layer. */
+	if (mi_disp_compat_fod_finger_down() && drm_state->crtc_w == 266 && drm_state->crtc_h == 266 &&
+	    drm_state->crtc_x == 407 && drm_state->crtc_y == 1872)
+		return 1;
+
+	return 0;
 }
 
 static void sde_plane_atomic_update(struct drm_plane *plane,

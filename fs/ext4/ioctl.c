@@ -440,6 +440,12 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct super_block *sb = inode->i_sb;
 	struct ext4_inode_info *ei = EXT4_I(inode);
 	unsigned int flags;
+	{
+		long r = fscrypt_compat_ioctl(filp, cmd, arg);
+
+		if (r != -ENOIOCTLCMD)
+			return r;
+	}
 
 	ext4_debug("cmd = %u, arg = %lu\n", cmd, arg);
 

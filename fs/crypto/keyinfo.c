@@ -193,6 +193,28 @@ select_encryption_mode(struct fscrypt_info *ci, const struct inode *inode)
 	return ERR_PTR(-EINVAL);
 }
 
+/* Derive the inode's actual encryption key from a v1 master key */
+static int derive_from_payload(const struct inode *inode,
+			       const struct fscrypt_context *ctx,
+			       const struct fscrypt_key *payload,
+			       u8 *derived_key, const struct fscrypt_mode *mode)
+{
+	if (!(ctx->flags & FS_POLICY_FLAG_DIRECT_KEY))
+		return derive_key_aes(payload->raw, ctx, derived_key, mode->keysize);
+	if (mode->ivsize < offsetofend(union fscrypt_iv, nonce)) {
+		fscrypt_warn(inode->i_sb, "direct key mode not allowed with %s",
+			     mode->friendly_name);
+		return -EINVAL;
+	}
+	if (ctx->contents_encryption_mode != ctx->filenames_encryption_mode) {
+		fscrypt_warn(inode->i_sb,
+			     "direct key mode not allowed with different contents and filenames modes");
+		return -EINVAL;
+	}
+	memcpy(derived_key, payload->raw, mode->keysize);
+	return 0;
+}
+
 /* Find the master key, then derive the inode's actual encryption key */
 static int find_and_derive_key(const struct inode *inode,
 			       const struct fscrypt_context *ctx,
@@ -210,28 +232,23 @@ static int find_and_derive_key(const struct inode *inode,
 						ctx->master_key_descriptor,
 						mode->keysize, &payload);
 	}
+	if (key == ERR_PTR(-ENOKEY)) {
+		/* added by FS_IOC_ADD_ENCRYPTION_KEY (keyring_compat.c) */
+		struct fscrypt_key *tmp = kmalloc(sizeof(*tmp), GFP_NOFS);
+
+		if (!tmp)
+			return -ENOMEM;
+		err = fscrypt_compat_get_key(ctx->master_key_descriptor,
+					     mode->keysize, tmp);
+		if (!err)
+			err = derive_from_payload(inode, ctx, tmp, derived_key, mode);
+		kzfree(tmp);
+		return err;
+	}
 	if (IS_ERR(key))
 		return PTR_ERR(key);
 
-	if (ctx->flags & FS_POLICY_FLAG_DIRECT_KEY) {
-		if (mode->ivsize < offsetofend(union fscrypt_iv, nonce)) {
-			fscrypt_warn(inode->i_sb,
-				     "direct key mode not allowed with %s",
-				     mode->friendly_name);
-			err = -EINVAL;
-		} else if (ctx->contents_encryption_mode !=
-			   ctx->filenames_encryption_mode) {
-			fscrypt_warn(inode->i_sb,
-				     "direct key mode not allowed with different contents and filenames modes");
-			err = -EINVAL;
-		} else {
-			memcpy(derived_key, payload->raw, mode->keysize);
-			err = 0;
-		}
-	} else {
-		err = derive_key_aes(payload->raw, ctx, derived_key,
-				     mode->keysize);
-	}
+	err = derive_from_payload(inode, ctx, payload, derived_key, mode);
 	up_read(&key->sem);
 	key_put(key);
 	return err;

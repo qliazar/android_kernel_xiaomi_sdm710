@@ -15,6 +15,7 @@
  *
  */
 
+#include <linux/mi_disp_compat.h>
 #include <linux/input/tp_common.h>
 #include "focaltech_core.h"
 
@@ -59,6 +60,7 @@ static int fts_fod_report_ptr_event(struct fts_ts_data *ts_data,
 		ts_data->fod_x = x;
 		ts_data->fod_y = y;
 		tp_common_notify_fp_state();
+		mi_disp_compat_fod_pressed(pressed);
 		input_report_key(input_dev, BTN_INFO, pressed ? 1 : 0);
 		input_sync(input_dev);
 	}

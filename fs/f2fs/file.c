@@ -2919,6 +2919,12 @@ static int f2fs_ioc_resize_fs(struct file *filp, unsigned long arg)
 
 long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	{
+		long r = fscrypt_compat_ioctl(filp, cmd, arg);
+
+		if (r != -ENOIOCTLCMD)
+			return r;
+	}
 	if (unlikely(f2fs_cp_error(F2FS_I_SB(file_inode(filp)))))
 		return -EIO;
 	if (!f2fs_is_checkpoint_ready(F2FS_I_SB(file_inode(filp))))

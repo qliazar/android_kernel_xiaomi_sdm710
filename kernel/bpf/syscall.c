@@ -248,6 +248,9 @@ static int map_create(union bpf_attr *attr)
 	int f_flags;
 	int err;
 
+	/* pyxis compat: drop newer fields (names, flags, BTF) */
+	memset((void *)&attr->map_flags + sizeof(attr->map_flags), 0,
+	       sizeof(*attr) - offsetof(union bpf_attr, map_flags) - sizeof(attr->map_flags));
 	err = CHECK_ATTR(BPF_MAP_CREATE);
 	if (err)
 		return -EINVAL;
@@ -262,6 +265,10 @@ static int map_create(union bpf_attr *attr)
 		return PTR_ERR(map);
 
 	atomic_set(&map->refcnt, 1);
+	{
+		static atomic_t pyxis_map_idr = ATOMIC_INIT(0);
+		map->compat_id = atomic_inc_return(&pyxis_map_idr);
+	}
 	atomic_set(&map->usercnt, 1);
 
 	err = security_bpf_map_alloc(map);
@@ -808,6 +815,9 @@ static int bpf_prog_load(union bpf_attr *attr)
 	char license[128];
 	bool is_gpl;
 
+	/* pyxis compat: drop newer fields (names, flags, BTF) */
+	memset((void *)&attr->kern_version + sizeof(attr->kern_version), 0,
+	       sizeof(*attr) - offsetof(union bpf_attr, kern_version) - sizeof(attr->kern_version));
 	if (CHECK_ATTR(BPF_PROG_LOAD))
 		return -EINVAL;
 
@@ -1002,6 +1012,61 @@ static int bpf_prog_detach(const union bpf_attr *attr)
 }
 #endif /* CONFIG_CGROUP_BPF */
 
+/* pyxis compat: BPF_OBJ_GET_INFO_BY_FD (Linux 4.13) for maps and programs */
+#define BPF_OBJ_GET_INFO_BY_FD_COMPAT 15
+
+struct compat_bpf_map_info {
+	__u32 type, id, key_size, value_size, max_entries, map_flags;
+	char name[16];
+} __aligned(8);
+
+struct compat_bpf_prog_info {
+	__u32 type, id;
+	__u8 tag[8];
+} __aligned(8);
+
+static int bpf_obj_get_info_compat(const union bpf_attr *attr, union bpf_attr __user *uattr)
+{
+	const __u32 *raw = (const __u32 *)attr;
+	__u32 ufd = raw[0], info_len = raw[1];
+	void __user *uinfo = u64_to_ptr(*(const __u64 *)&raw[2]);
+	struct fd f = fdget(ufd);
+	union {
+		struct compat_bpf_map_info map;
+		struct compat_bpf_prog_info prog;
+	} info;
+	__u32 len;
+	int err = 0;
+
+	if (!f.file)
+		return -EBADFD;
+	memset(&info, 0, sizeof(info));
+	if (f.file->f_op == &bpf_map_fops) {
+		struct bpf_map *map = f.file->private_data;
+
+		info.map.type = map->map_type;
+		info.map.id = map->compat_id;
+		info.map.key_size = map->key_size;
+		info.map.value_size = map->value_size;
+		info.map.max_entries = map->max_entries;
+		info.map.map_flags = map->map_flags;
+		len = min_t(__u32, info_len, sizeof(info.map));
+	} else if (f.file->f_op == &bpf_prog_fops) {
+		struct bpf_prog *prog = f.file->private_data;
+
+		info.prog.type = prog->type;	/* no program tags before 4.10 */
+		len = min_t(__u32, info_len, sizeof(info.prog));
+	} else {
+		fdput(f);
+		return -EINVAL;
+	}
+	fdput(f);
+	if (copy_to_user(uinfo, &info, len) ||
+	    put_user(len, (__u32 __user *)((char __user *)uattr + 4)))
+		err = -EFAULT;
+	return err;
+}
+
 SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, size)
 {
 	union bpf_attr attr;
@@ -1033,8 +1098,8 @@ SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, siz
 			err = get_user(val, addr);
 			if (err)
 				return err;
-			if (val)
-				return -E2BIG;
+			/* pyxis compat: newer userspace fills names/BTF/hints we ignore */
+			(void)val;
 		}
 		size = sizeof(attr);
 	}
@@ -1072,6 +1137,9 @@ SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, siz
 		break;
 	case BPF_OBJ_GET:
 		err = bpf_obj_get(&attr);
+		break;
+	case BPF_OBJ_GET_INFO_BY_FD_COMPAT:
+		err = bpf_obj_get_info_compat(&attr, uattr);
 		break;
 
 #ifdef CONFIG_CGROUP_BPF

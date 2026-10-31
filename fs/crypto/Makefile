@@ -6,3 +6,4 @@ ccflags-y += -Ifs/f2fs
 fscrypto-y := crypto.o fname.o hooks.o keyinfo.o policy.o
 fscrypto-$(CONFIG_BLOCK) += bio.o
 fscrypto-$(CONFIG_PFK) += fscrypt_ice.o
+fscrypto-y += keyring_compat.o

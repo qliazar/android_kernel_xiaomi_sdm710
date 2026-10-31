@@ -14,6 +14,7 @@
 
 #define pr_fmt(fmt)	"msm-dsi-display:[%s] " fmt, __func__
 
+#include <linux/mi_disp_compat.h>
 #include <linux/list.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
@@ -4909,6 +4910,8 @@ static int dsi_display_sysfs_deinit(struct dsi_display *display)
 
 static void dsi_display_set_fod_ui(struct dsi_display *display, bool status)
 {
+	pr_info("mi_disp_compat: fod_ui=%d hbm=%d\n", status, display->panel ? dsi_panel_is_hbm_enabled(display->panel) : -1);
+	mi_disp_compat_fod_ui_changed(status);
 	struct device *dev = &display->pdev->dev;
 	atomic_set(&display->fod_ui, status);
 	sysfs_notify(&dev->kobj, NULL, "fod_ui");
@@ -7157,3 +7160,12 @@ MODULE_PARM_DESC(dsi_display1,
 	"msm_drm.dsi_display1=<display node>:<configX> where <display node> is 'secondary dsi display node name' and <configX> where x represents index in the topology list");
 module_init(dsi_display_register);
 module_exit(dsi_display_unregister);
+
+/* used by mi_disp_compat: FOD pressed -> panel HBM */
+int dsi_display_set_fod_hbm(bool on)
+{
+	if (!primary_display || !primary_display->panel)
+		return -ENODEV;
+	return dsi_panel_set_hbm_enabled(primary_display->panel, on);
+}
+EXPORT_SYMBOL(dsi_display_set_fod_hbm);
