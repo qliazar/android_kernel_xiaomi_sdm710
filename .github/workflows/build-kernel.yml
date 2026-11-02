@@ -17,6 +17,8 @@ env:
   CCACHE_COMPRESSLEVEL: 1
   KBUILD_BUILD_USER: builder
   KBUILD_BUILD_HOST: actions
+  KSU_MANUAL_HOOK: y
+  CONFIG_KSU_MANUAL_HOOK: y
 
 jobs:
   build:
@@ -27,6 +29,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          submodules: recursive
+
+      - name: Setup KernelSU-Next
+        run: |
+          if [ -f "$(git -C KernelSU-Next rev-parse --git-dir)/shallow" ]; then
+            git -C KernelSU-Next fetch --unshallow origin || true
+          fi
+          git -C KernelSU-Next fetch --tags origin || true
 
       - name: Cache Clang
         uses: actions/cache@v4
