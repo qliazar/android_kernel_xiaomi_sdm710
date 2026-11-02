@@ -1,0 +1,91 @@
+name: Kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ lineage-22.2 ]
+
+env:
+  ARCH: arm64
+  SUBARCH: arm64
+  CLANG_TRIPLE: aarch64-linux-gnu-
+  CROSS_COMPILE: aarch64-linux-gnu-
+  CROSS_COMPILE_ARM32: arm-linux-gnueabi-
+  CCACHE_DIR: /home/runner/.ccache
+  CCACHE_MAXSIZE: 3G
+  CCACHE_COMPRESS: 1
+  CCACHE_COMPRESSLEVEL: 1
+  KBUILD_BUILD_USER: builder
+  KBUILD_BUILD_HOST: actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache Clang
+        uses: actions/cache@v4
+        with:
+          path: clang
+          key: ${{ runner.os }}-proton-clang-master
+
+      - name: Cache Ccache
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.ccache
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-ccache-
+
+      - name: Deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends bc libelf-dev ccache zip libncurses6
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5 2>/dev/null || true
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5 2>/dev/null || true
+
+      - name: Toolchain
+        run: |
+          if [ ! -f "clang/bin/clang" ]; then
+            git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          fi
+          # Remove outdated bundled host binutils so host gcc uses native system ld/as
+          rm -f clang/bin/ld clang/bin/as
+
+      - name: Build
+        run: |
+          export PATH="$PWD/clang/bin:$PATH"
+
+          mkdir -p out
+          scripts/kconfig/merge_config.sh -m -O out \
+            arch/arm64/configs/sdm670-perf_defconfig \
+            arch/arm64/configs/xiaomi/sdm710-common.config \
+            arch/arm64/configs/xiaomi/pyxis.config
+
+          JOBS=$(( $(nproc --all) * 2 ))
+
+          make -j${JOBS} O=out CC="ccache clang" olddefconfig
+          make -j${JOBS} O=out CC="ccache clang" Image.gz dtbs
+
+      - name: Package
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+
+          cp anykernel.sh anykernel/anykernel.sh
+
+          cp out/arch/arm64/boot/Image.gz anykernel/Image.gz
+          cp out/arch/arm64/boot/Image.gz anykernel/image.gz.img
+          find out/arch/arm64/boot/dts/qcom/ -name "*.dtb" -exec cat {} + > anykernel/dtb
+
+          cd anykernel
+          zip -r9 ../pyxis-kernel-$(date +'%Y%m%d').zip * -x .git README.md *placeholder
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyxis-kernel
+          path: pyxis-kernel-*.zip
