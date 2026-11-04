@@ -19,10 +19,34 @@
 #include "sde_encoder.h"
 #include <linux/backlight.h>
 #include <linux/string.h>
+#include <linux/moduleparam.h>
 #include "dsi_drm.h"
 #include "dsi_display.h"
 #include "sde_crtc.h"
 #include "sde_rm.h"
+
+/* Backlight dimmer option (flar2 / ElementalX) */
+bool backlight_dimmer = true;
+module_param(backlight_dimmer, bool, 0644);
+
+static ssize_t backlight_dimmer_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", backlight_dimmer ? 1 : 0);
+}
+
+static ssize_t backlight_dimmer_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	if (count && (buf[0] == '1' || buf[0] == 'y' || buf[0] == 'Y'))
+		backlight_dimmer = true;
+	else
+		backlight_dimmer = false;
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(backlight_dimmer);
 
 #define BL_NODE_NAME_SIZE 32
 
@@ -86,8 +110,21 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 		brightness = display->panel->bl_config.bl_max_level;
 
 	/* map UI brightness into driver backlight level with rounding */
-	bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_max_level,
-			display->panel->bl_config.brightness_max_level);
+	if (backlight_dimmer) {
+		u32 v = mult_frac(brightness, 255,
+				display->panel->bl_config.brightness_max_level);
+		u32 v_dim;
+
+		if (v < 3)
+			v_dim = 1;
+		else
+			v_dim = (12 * v * v + 1393 * v + 3060) / 4465;
+
+		bl_lvl = mult_frac(v_dim, display->panel->bl_config.bl_max_level, 255);
+	} else {
+		bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_max_level,
+				display->panel->bl_config.brightness_max_level);
+	}
 
 	if (!bl_lvl && brightness)
 		bl_lvl = 1;
@@ -154,6 +191,10 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 		c_conn->bl_device = NULL;
 		return -ENODEV;
 	}
+
+	if (device_create_file(&c_conn->bl_device->dev, &dev_attr_backlight_dimmer))
+		pr_warn("failed to create backlight_dimmer sysfs node\n");
+
 	display_count++;
 
 	return 0;
@@ -823,8 +864,10 @@ static void sde_connector_destroy(struct drm_connector *connector)
 		drm_property_unreference_blob(c_conn->blob_ext_hdr);
 	msm_property_destroy(&c_conn->property_info);
 
-	if (c_conn->bl_device)
+	if (c_conn->bl_device) {
+		device_remove_file(&c_conn->bl_device->dev, &dev_attr_backlight_dimmer);
 		backlight_device_unregister(c_conn->bl_device);
+	}
 	drm_connector_unregister(connector);
 	mutex_destroy(&c_conn->lock);
 	sde_fence_deinit(&c_conn->retire_fence);
