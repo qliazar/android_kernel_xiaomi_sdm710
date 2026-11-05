@@ -16,7 +16,7 @@
 
 static char list_wl[LENGTH_LIST_WL];
 static const char list_wl_default[] =
-	"qcom_rx_wakelock;wlan;wlan_wow_wl;wlan_extscan_wl;netmgr_wl;NETLINK";
+	"qcom_rx_wakelock;wlan;wlan_wow_wl;wlan_extscan_wl;wlan_ipa;wlan_pno_wl;wcnss_filter_lock;netmgr_wl;NETLINK;IPA_WS";
 static char list_wl_search[LENGTH_LIST_WL * 2 + 8];
 static bool wl_blocker_active;
 static bool debug;

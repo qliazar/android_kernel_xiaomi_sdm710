@@ -2783,8 +2783,10 @@ static int smb2_probe(struct platform_device *pdev)
 	pr_info("QPNP SMB2 probed successfully usb:present=%d type=%d batt:present = %d health = %d charge = %d\n",
 		usb_present, chg->real_charger_type,
 		batt_present, batt_health, batt_charge_type);
-	schedule_delayed_work(&chg->reg_work, 60 * HZ);
-	schedule_delayed_work(&chg->status_report_work, msecs_to_jiffies(25000));
+	queue_delayed_work(system_power_efficient_wq,
+		&chg->reg_work, 60 * HZ);
+	queue_delayed_work(system_power_efficient_wq,
+		&chg->status_report_work, msecs_to_jiffies(25000));
 	return rc;
 
 cleanup:
