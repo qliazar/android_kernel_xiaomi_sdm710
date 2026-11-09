@@ -340,3 +340,11 @@ config PM_GENERIC_DOMAINS_OF
 
 config CPU_PM
 	bool
+
+config BOEFFLA_WL_BLOCKER
+	bool "Boeffla wakelock blocker driver"
+	depends on PM_SLEEP
+	default y
+	help
+	  This driver allows blocking specific wakelocks in the kernel
+	  to prevent battery drain during suspend.
