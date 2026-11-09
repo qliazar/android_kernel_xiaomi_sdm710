@@ -12,15 +12,6 @@ config IOSCHED_NOOP
 	  that do their own scheduling and require only minimal assistance from
 	  the kernel.
 
-config IOSCHED_MAPLE
-	tristate "Maple I/O scheduler"
-	default y
-	---help---
-	  Maple uses a first come first serve style algorithm with separated
-	  read/write handling to allow for read biases. By prioritizing reads,
-	  interactive tasks and UI responsiveness improve significantly.
-	  Designed specifically for flash and UFS based mobile storage devices.
-
 config IOSCHED_DEADLINE
 	tristate "Deadline I/O scheduler"
 	default y
@@ -50,13 +41,10 @@ config CFQ_GROUP_IOSCHED
 
 choice
 	prompt "Default I/O scheduler"
-	default DEFAULT_MAPLE
+	default DEFAULT_CFQ
 	help
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
-
-	config DEFAULT_MAPLE
-		bool "Maple" if IOSCHED_MAPLE=y
 
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
@@ -71,7 +59,6 @@ endchoice
 
 config DEFAULT_IOSCHED
 	string
-	default "maple" if DEFAULT_MAPLE
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
