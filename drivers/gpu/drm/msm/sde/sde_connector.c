@@ -19,10 +19,55 @@
 #include "sde_encoder.h"
 #include <linux/backlight.h>
 #include <linux/string.h>
+#include <linux/moduleparam.h>
 #include "dsi_drm.h"
 #include "dsi_display.h"
 #include "sde_crtc.h"
 #include "sde_rm.h"
+
+static ssize_t hbm_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct sde_connector *c_conn = dev_get_drvdata(dev);
+	struct dsi_display *display;
+
+	if (!c_conn || !c_conn->display)
+		return -EINVAL;
+
+	display = (struct dsi_display *)c_conn->display;
+	if (!display->panel)
+		return -EINVAL;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 dsi_panel_is_hbm_enabled(display->panel) ? 1 : 0);
+}
+
+static ssize_t hbm_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct sde_connector *c_conn = dev_get_drvdata(dev);
+	struct dsi_display *display;
+	int val;
+	bool status;
+	int rc;
+
+	if (!c_conn || !c_conn->display)
+		return -EINVAL;
+
+	display = (struct dsi_display *)c_conn->display;
+	if (!display->panel)
+		return -EINVAL;
+
+	if (kstrtoint(buf, 10, &val) == 0)
+		status = (val > 0);
+	else if (kstrtobool(buf, &status))
+		return -EINVAL;
+
+	rc = dsi_panel_set_hbm_enabled(display->panel, status);
+	return !rc ? count : rc;
+}
+
+static DEVICE_ATTR_RW(hbm);
 
 #define BL_NODE_NAME_SIZE 32
 
@@ -154,6 +199,13 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 		c_conn->bl_device = NULL;
 		return -ENODEV;
 	}
+
+	if (device_create_file(&c_conn->bl_device->dev, &dev_attr_backlight_dimmer))
+		pr_warn("failed to create backlight_dimmer sysfs node\n");
+
+	if (device_create_file(&c_conn->bl_device->dev, &dev_attr_hbm))
+		pr_warn("failed to create hbm backlight sysfs node\n");
+
 	display_count++;
 
 	return 0;
@@ -823,8 +875,10 @@ static void sde_connector_destroy(struct drm_connector *connector)
 		drm_property_unreference_blob(c_conn->blob_ext_hdr);
 	msm_property_destroy(&c_conn->property_info);
 
-	if (c_conn->bl_device)
+	if (c_conn->bl_device) {
+		device_remove_file(&c_conn->bl_device->dev, &dev_attr_hbm);
 		backlight_device_unregister(c_conn->bl_device);
+	}
 	drm_connector_unregister(connector);
 	mutex_destroy(&c_conn->lock);
 	sde_fence_deinit(&c_conn->retire_fence);
