@@ -22,6 +22,8 @@
 
 #include <linux/msm_drm_notify.h>
 #include <linux/kernfs.h>
+#include <linux/fb.h>
+#include <linux/kdev_t.h>
 
 #include "msm_drv.h"
 #include "sde_connector.h"
@@ -64,6 +66,8 @@ static const struct of_device_id dsi_display_dt_match[] = {
 
 static struct dsi_display *primary_display;
 static struct dsi_display *secondary_display;
+
+static bool hbm_mode = false;
 
 static struct kernfs_node *dsi_link;
 
@@ -4746,34 +4750,42 @@ static ssize_t hbm_show(struct device *dev, struct device_attribute *attr,
 {
 	struct dsi_display *display = dev_get_drvdata(dev);
 
-	if (!display->panel) {
+	if (!display)
+		display = primary_display;
+
+	if (!display || !display->panel) {
 		pr_err("Invalid display\n");
 		return -EINVAL;
 	}
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
-			 dsi_panel_is_hbm_enabled(display->panel));
+			 dsi_panel_is_hbm_enabled(display->panel) ? 1 : 0);
 }
 
 static ssize_t hbm_store(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
 {
 	struct dsi_display *display = dev_get_drvdata(dev);
+	int val;
 	bool status;
 	int rc;
 
-	display = dev_get_drvdata(dev);
-	if (!display) {
+	if (!display)
+		display = primary_display;
+
+	if (!display || !display->panel) {
 		pr_err("Invalid display\n");
 		return -EINVAL;
 	}
 
-	rc = kstrtobool(buf, &status);
-	if (rc) {
-		pr_err("Failed to parse value, rc=%d\n", rc);
-		return rc;
+	if (kstrtoint(buf, 10, &val) == 0)
+		status = (val > 0);
+	else if (kstrtobool(buf, &status)) {
+		pr_err("Failed to parse value\n");
+		return -EINVAL;
 	}
 
+	hbm_mode = status;
 	rc = dsi_panel_set_hbm_enabled(display->panel, status);
 	if (rc)
 		pr_err("Failed to %s HBM mode, rc=%d\n",
@@ -4839,6 +4851,31 @@ static struct attribute_group display_fs_attrs_group = {
 	.attrs = display_fs_attrs,
 };
 
+static struct device *fb0_device;
+
+static void dsi_display_fb0_init(struct dsi_display *display)
+{
+	if (fb_class && !fb0_device) {
+		fb0_device = device_create(fb_class, NULL, MKDEV(0, 0), NULL, "fb0");
+		if (IS_ERR_OR_NULL(fb0_device)) {
+			fb0_device = NULL;
+			return;
+		}
+		dev_set_drvdata(fb0_device, display);
+		if (device_create_file(fb0_device, &dev_attr_hbm))
+			pr_warn("failed to create fb0 hbm node\n");
+	}
+}
+
+static void dsi_display_fb0_deinit(void)
+{
+	if (fb0_device) {
+		device_remove_file(fb0_device, &dev_attr_hbm);
+		device_destroy(fb_class, MKDEV(0, 0));
+		fb0_device = NULL;
+	}
+}
+
 static int dsi_display_sysfs_init(struct dsi_display *display)
 {
 	int rc = 0;
@@ -4874,6 +4911,9 @@ static int dsi_display_sysfs_init(struct dsi_display *display)
 			goto err_sysfs_dyn_dsi_clk;
 	}
 
+	if (!strcmp(display->display_type, "primary"))
+		dsi_display_fb0_init(display);
+
 	pr_debug("[%s] dsi_display_sysfs_init:%d,panel mode:%d\n",
 		display->name, rc, display->panel->panel_mode);
 	return rc;
@@ -4893,6 +4933,9 @@ err_sysfs_disp_fs:
 static int dsi_display_sysfs_deinit(struct dsi_display *display)
 {
 	struct device *dev = &display->pdev->dev;
+
+	if (!strcmp(display->display_type, "primary"))
+		dsi_display_fb0_deinit();
 
 	if (display->panel->panel_mode == DSI_OP_CMD_MODE)
 		sysfs_remove_group(&dev->kobj,
@@ -7155,5 +7198,31 @@ module_param_string(dsi_display1, dsi_display_secondary, MAX_CMDLINE_PARAM_LEN,
 								0600);
 MODULE_PARM_DESC(dsi_display1,
 	"msm_drm.dsi_display1=<display node>:<configX> where <display node> is 'secondary dsi display node name' and <configX> where x represents index in the topology list");
+static int set_hbm_mode(const char *val, const struct kernel_param *kp)
+{
+	int rc;
+	bool n;
+
+	rc = kstrtobool(val, &n);
+	if (rc)
+		return rc;
+
+	hbm_mode = n;
+	if (primary_display && primary_display->panel)
+		dsi_panel_set_hbm_enabled(primary_display->panel, n);
+
+	return 0;
+}
+
+static const struct kernel_param_ops hbm_mode_ops = {
+	.set = set_hbm_mode,
+	.get = param_get_bool,
+};
+
+module_param_cb(hbm_mode, &hbm_mode_ops, &hbm_mode, 0644);
+MODULE_PARM_DESC(hbm_mode, "Enable High Brightness Mode (HBM)");
+module_param_cb(hbm, &hbm_mode_ops, &hbm_mode, 0644);
+MODULE_PARM_DESC(hbm, "Enable High Brightness Mode (HBM)");
+
 module_init(dsi_display_register);
 module_exit(dsi_display_unregister);

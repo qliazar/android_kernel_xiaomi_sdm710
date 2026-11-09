@@ -200,9 +200,6 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 		return -ENODEV;
 	}
 
-	if (device_create_file(&c_conn->bl_device->dev, &dev_attr_backlight_dimmer))
-		pr_warn("failed to create backlight_dimmer sysfs node\n");
-
 	if (device_create_file(&c_conn->bl_device->dev, &dev_attr_hbm))
 		pr_warn("failed to create hbm backlight sysfs node\n");
 
