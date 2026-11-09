@@ -11,6 +11,8 @@
  */
 
 #include <linux/device.h>
+#include <linux/module.h>
+#include <linux/kobject.h>
 #include <linux/regmap.h>
 #include <linux/delay.h>
 #include <linux/iio/consumer.h>
@@ -4682,6 +4684,56 @@ static void smblib_handle_hvdcp_detect_done(struct smb_charger *chg,
 		   rising ? "rising" : "falling");
 }
 
+
+/* Fast charge control */
+static int force_fast_charge = 0;
+module_param(force_fast_charge, int, 0644);
+
+static ssize_t force_fast_charge_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", force_fast_charge);
+}
+
+static ssize_t force_fast_charge_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val = 0;
+	if (sscanf(buf, "%d", &val) != 1)
+		return -EINVAL;
+	if (val < 0 || val > 1)
+		val = 0;
+	force_fast_charge = val;
+	return count;
+}
+
+static struct kobj_attribute force_fast_charge_attribute =
+	__ATTR(force_fast_charge, 0664, force_fast_charge_show, force_fast_charge_store);
+
+static struct attribute *force_fast_charge_attrs[] = {
+	&force_fast_charge_attribute.attr,
+	NULL,
+};
+
+static struct attribute_group force_fast_charge_attr_group = {
+	.attrs = force_fast_charge_attrs,
+};
+
+static struct kobject *force_fast_charge_kobj;
+
+static void smb_init_fast_charge(void)
+{
+	int ret;
+	if (force_fast_charge_kobj)
+		return;
+	force_fast_charge_kobj = kobject_create_and_add("fast_charge", kernel_kobj);
+	if (!force_fast_charge_kobj)
+		return;
+	ret = sysfs_create_group(force_fast_charge_kobj, &force_fast_charge_attr_group);
+	if (ret) {
+		kobject_put(force_fast_charge_kobj);
+		force_fast_charge_kobj = NULL;
+	}
+}
+
 static void smblib_force_legacy_icl(struct smb_charger *chg, int pst)
 {
 	int typec_mode;
@@ -4698,10 +4750,15 @@ static void smblib_force_legacy_icl(struct smb_charger *chg, int pst)
 		 * enumeration is done. Ensure that USB_PSY has at least voted
 		 * for 100mA before releasing the LEGACY_UNKNOWN vote
 		 */
-		if (!is_client_vote_enabled(chg->usb_icl_votable,
-								USB_PSY_VOTER))
-			vote(chg->usb_icl_votable, USB_PSY_VOTER, true, 500000);
-		vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, false, 0);
+		if (force_fast_charge) {
+			vote(chg->usb_icl_votable, USB_PSY_VOTER, true, 1200000);
+			vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, true, 1200000);
+		} else {
+			if (!is_client_vote_enabled(chg->usb_icl_votable,
+									USB_PSY_VOTER))
+				vote(chg->usb_icl_votable, USB_PSY_VOTER, true, 500000);
+			vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, false, 0);
+		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:
 		vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, true, 1500000);
@@ -6357,6 +6414,7 @@ static void smblib_iio_deinit(struct smb_charger *chg)
 int smblib_init(struct smb_charger *chg)
 {
 	int rc = 0;
+	smb_init_fast_charge();
 
 	mutex_init(&chg->lock);
 	mutex_init(&chg->write_lock);

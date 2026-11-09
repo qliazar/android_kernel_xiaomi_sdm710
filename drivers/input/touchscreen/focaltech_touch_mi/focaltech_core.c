@@ -1372,7 +1372,60 @@ static struct tp_common_ops fp_state_ops = {
 *  Output:
 *  Return:
 *****************************************************************************/
-static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static 
+/* /sys/android_touch interface for EXKM / FKM */
+static struct kobject *android_touch_kobj;
+static struct fts_ts_data *fts_data_global;
+
+static ssize_t at_dt2w_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	int val = 0;
+	if (fts_data_global)
+		val = fts_data_global->double_tap ? 1 : 0;
+	return snprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+
+static ssize_t at_dt2w_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val = 0;
+	if (sscanf(buf, "%d", &val) == 1 && fts_data_global) {
+		fts_data_global->double_tap = (val != 0);
+	}
+	return count;
+}
+
+static struct kobj_attribute at_doubletap2wake_attr =
+	__ATTR(doubletap2wake, 0664, at_dt2w_show, at_dt2w_store);
+static struct kobj_attribute at_wake_gestures_attr =
+	__ATTR(wake_gestures, 0664, at_dt2w_show, at_dt2w_store);
+
+static struct attribute *at_attrs[] = {
+	&at_doubletap2wake_attr.attr,
+	&at_wake_gestures_attr.attr,
+	NULL,
+};
+
+static struct attribute_group at_attr_group = {
+	.attrs = at_attrs,
+};
+
+static void fts_init_android_touch(struct fts_ts_data *data)
+{
+	int ret;
+	fts_data_global = data;
+	if (android_touch_kobj)
+		return;
+	android_touch_kobj = kobject_create_and_add("android_touch", NULL);
+	if (!android_touch_kobj)
+		return;
+	ret = sysfs_create_group(android_touch_kobj, &at_attr_group);
+	if (ret) {
+		kobject_put(android_touch_kobj);
+		android_touch_kobj = NULL;
+	}
+}
+
+int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int ret = 0;
 	struct fts_ts_platform_data *pdata;
@@ -1410,6 +1463,7 @@ static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 	fts_data = ts_data;
 	ts_data->client = client;
+	fts_init_android_touch(ts_data);
 	ts_data->pdata = pdata;
 	i2c_set_clientdata(client, ts_data);
 
