@@ -990,7 +990,9 @@ void __init swap_setup(void)
 #endif
 
 	/* Use a smaller cluster for small-memory machines */
-	if (megs < 16)
+	if (IS_ENABLED(CONFIG_ZRAM))
+		page_cluster = 0;
+	else if (megs < 16)
 		page_cluster = 2;
 	else
 		page_cluster = 3;
