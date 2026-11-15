@@ -19,6 +19,10 @@
 	status = "ok";
 };
 
+&mdss_dsi_phy0 {
+	qcom,panel-allow-phy-poweroff;
+};
+
 &tlmm {
 	ts_mux {
 		ts_active: ts_active {
