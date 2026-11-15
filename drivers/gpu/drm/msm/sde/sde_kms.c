@@ -98,6 +98,8 @@ static bool sdecustom = true;
 module_param(sdecustom, bool, 0400);
 MODULE_PARM_DESC(sdecustom, "Enable customizations for sde clients");
 
+struct drm_device *kcal_drm_dev = NULL;
+
 static int sde_kms_hw_init(struct msm_kms *kms);
 static int _sde_kms_mmu_destroy(struct sde_kms *sde_kms);
 static int _sde_kms_mmu_init(struct sde_kms *sde_kms);
@@ -3289,6 +3291,7 @@ static int sde_kms_hw_init(struct msm_kms *kms)
 
 	sde_kms = to_sde_kms(kms);
 	dev = sde_kms->dev;
+	kcal_drm_dev = dev;
 	if (!dev || !dev->platformdev) {
 		SDE_ERROR("invalid device\n");
 		goto end;
