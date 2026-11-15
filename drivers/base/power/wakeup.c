@@ -528,6 +528,10 @@ static bool wakeup_source_not_registered(struct wakeup_source *ws)
  * core of the event by incrementing the counter of of wakeup events being
  * processed.
  */
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+extern bool boeffla_is_wakelock_blocked(const char *name);
+#endif
+
 static void wakeup_source_activate(struct wakeup_source *ws)
 {
 	unsigned int cec;
@@ -535,6 +539,11 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	if (WARN_ONCE(wakeup_source_not_registered(ws),
 			"unregistered wakeup source\n"))
 		return;
+
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	if (ws && ws->name && boeffla_is_wakelock_blocked(ws->name))
+		return;
+#endif
 
 	/*
 	 * active wakeup source should bring the system
