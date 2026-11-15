@@ -2194,6 +2194,9 @@ struct task_struct {
 #ifdef CONFIG_MMU
 	struct task_struct *oom_reaper_list;
 #endif
+#ifdef CONFIG_ANDROID_SIMPLE_LMK
+	struct task_struct *simple_lmk_next;
+#endif
 #ifdef CONFIG_VMAP_STACK
 	struct vm_struct *stack_vm_area;
 #endif
