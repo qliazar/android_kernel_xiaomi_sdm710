@@ -3579,7 +3579,7 @@ static int fg_get_time_to_full_locked(struct fg_chip *chip, int *val)
 		return -ENODATA;
 
 	if (chip->bp.float_volt_uv <= 0) {
-		pr_err("battery profile is not loaded\n");
+		pr_debug("battery profile is not loaded\n");
 		return -ENODATA;
 	}
 
