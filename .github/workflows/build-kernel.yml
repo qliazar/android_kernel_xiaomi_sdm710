@@ -88,6 +88,8 @@ jobs:
           cp out/arch/arm64/boot/Image.gz anykernel/Image.gz
           cp out/arch/arm64/boot/Image.gz anykernel/image.gz.img
           find out/arch/arm64/boot/dts/qcom/ -name "*.dtb" -exec cat {} + > anykernel/dtb
+          curl -sL "https://android.googlesource.com/platform/system/libufdt/+/refs/heads/master/utils/src/mkdtboimg.py?format=TEXT" | base64 -d > mkdtboimg.py
+          python3 mkdtboimg.py create anykernel/dtbo.img out/arch/arm64/boot/dts/qcom/pyxis-sdm710-overlay.dtbo
 
           cd anykernel
           zip -r9 ../pyxis-kernel-$(date +'%Y%m%d').zip * -x .git README.md *placeholder

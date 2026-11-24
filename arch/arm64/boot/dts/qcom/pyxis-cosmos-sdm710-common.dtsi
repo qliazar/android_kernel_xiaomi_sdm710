@@ -653,3 +653,83 @@
 	};
 };
 
+&soc {
+	qcom,msm-thermal-simple {
+		compatible = "qcom,msm-thermal-simple";
+		qcom,thermal-vadc = <&pm660_vadc>;
+		qcom,adc-channel = <0x4c>;
+		qcom,poll-ms = <3000>;
+		qcom,start-delay = <60>;
+
+		zone@0 {
+			reg = <0>;
+			qcom,silver-khz = <1708800>;
+			qcom,gold-khz = <2054400>;
+			qcom,trip-deg = <43000>;
+		};
+
+		zone@1 {
+			reg = <1>;
+			qcom,silver-khz = <1708800>;
+			qcom,gold-khz = <1996800>;
+			qcom,trip-deg = <44000>;
+		};
+
+		zone@2 {
+			reg = <2>;
+			qcom,silver-khz = <1612800>;
+			qcom,gold-khz = <1843200>;
+			qcom,trip-deg = <45000>;
+		};
+
+		zone@3 {
+			reg = <3>;
+			qcom,silver-khz = <1612800>;
+			qcom,gold-khz = <1747200>;
+			qcom,trip-deg = <46000>;
+		};
+
+		zone@4 {
+			reg = <4>;
+			qcom,silver-khz = <1516800>;
+			qcom,gold-khz = <1536000>;
+			qcom,trip-deg = <47000>;
+		};
+
+		zone@5 {
+			reg = <5>;
+			qcom,silver-khz = <1516800>;
+			qcom,gold-khz = <1363200>;
+			qcom,trip-deg = <48000>;
+		};
+
+		zone@6 {
+			reg = <6>;
+			qcom,silver-khz = <1324800>;
+			qcom,gold-khz = <1132800>;
+			qcom,trip-deg = <49000>;
+		};
+
+		zone@7 {
+			reg = <7>;
+			qcom,silver-khz = <1209600>;
+			qcom,gold-khz = <979200>;
+			qcom,trip-deg = <50000>;
+		};
+
+		zone@8 {
+			reg = <8>;
+			qcom,silver-khz = <998400>;
+			qcom,gold-khz = <825600>;
+			qcom,trip-deg = <51000>;
+		};
+
+		zone@9 {
+			reg = <9>;
+			qcom,silver-khz = <748800>;
+			qcom,gold-khz = <652800>;
+			qcom,trip-deg = <53000>;
+		};
+	};
+};
+
