@@ -507,6 +507,76 @@ static int qti_haptics_module_en(struct qti_hap_chip *chip, bool en)
 	return rc;
 }
 
+static int vmax_mv_override = 0;
+module_param_named(vmax_mv_override, vmax_mv_override, int, 0664);
+
+static struct qti_hap_chip *qti_hap_chip_ptr;
+
+static ssize_t vtg_level_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int val;
+
+	if (!qti_hap_chip_ptr)
+		return -ENODEV;
+
+	val = vmax_mv_override ? vmax_mv_override : qti_hap_chip_ptr->config.vmax_mv;
+	return snprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+
+static ssize_t vtg_level_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int data;
+
+	if (kstrtoint(buf, 10, &data) < 0)
+		return -EINVAL;
+
+	if (data < HAP_VMAX_MV_LSB)
+		data = HAP_VMAX_MV_LSB;
+	else if (data > HAP_VMAX_MV_MAX)
+		data = HAP_VMAX_MV_MAX;
+
+	vmax_mv_override = data;
+	return count;
+}
+
+static ssize_t vtg_min_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", HAP_VMAX_MV_LSB);
+}
+
+static ssize_t vtg_max_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", HAP_VMAX_MV_MAX);
+}
+
+static DEVICE_ATTR_RW(vtg_level);
+static DEVICE_ATTR_RO(vtg_min);
+static DEVICE_ATTR_RO(vtg_max);
+static DEVICE_ATTR(vmax_mv, 0664, vtg_level_show, vtg_level_store);
+
+static struct attribute *qti_hap_attrs[] = {
+	&dev_attr_vtg_level.attr,
+	&dev_attr_vtg_min.attr,
+	&dev_attr_vtg_max.attr,
+	&dev_attr_vmax_mv.attr,
+	NULL,
+};
+
+static struct attribute_group qti_hap_attr_group = {
+	.attrs = qti_hap_attrs,
+};
+
+static const struct attribute_group *qti_hap_attr_groups[] = {
+	&qti_hap_attr_group,
+	NULL,
+};
+
+static struct class *timed_output_class;
+
 static int qti_haptics_config_vmax(struct qti_hap_chip *chip, int vmax_mv)
 {
 	u8 addr, mask, val;
@@ -514,6 +584,11 @@ static int qti_haptics_config_vmax(struct qti_hap_chip *chip, int vmax_mv)
 
 	addr = REG_HAP_VMAX_CFG;
 	mask = HAP_VMAX_MV_MASK;
+	if(vmax_mv_override) {
+		if(vmax_mv_override > HAP_VMAX_MV_MAX)
+			vmax_mv_override = HAP_VMAX_MV_MAX;
+		vmax_mv = vmax_mv_override;
+	}
 	val = (vmax_mv / HAP_VMAX_MV_LSB) << HAP_VMAX_MV_SHIFT;
 	rc = qti_haptics_masked_write(chip, addr, mask, val);
 	if (rc < 0)
@@ -2027,6 +2102,12 @@ static int qti_haptics_probe(struct platform_device *pdev)
 	}
 
 	dev_set_drvdata(chip->dev, chip);
+	qti_hap_chip_ptr = chip;
+	timed_output_class = class_create(THIS_MODULE, "timed_output");
+	if (!IS_ERR(timed_output_class))
+		device_create_with_groups(timed_output_class, chip->dev,
+					  MKDEV(0, 0), chip,
+					  qti_hap_attr_groups, "vibrator");
 #ifdef CONFIG_DEBUG_FS
 	rc = qti_haptics_add_debugfs(chip);
 	if (rc < 0)
