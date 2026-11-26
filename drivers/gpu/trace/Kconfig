@@ -1,0 +1,6 @@
+config TRACE_GPU_MEM
+	bool "Enable GPU memory usage tracepoints"
+	default n
+	help
+	  This option enables the gpu_mem_total tracepoint for tracking
+	  global and per-process GPU memory usage.
