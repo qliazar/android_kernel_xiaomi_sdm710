@@ -1271,11 +1271,149 @@ static void sdm660_tx_mute_update_callback(struct work_struct *work)
 	}
 }
 
+static struct snd_soc_codec *sound_control_codec_ptr;
+
+static ssize_t headphone_gain_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	if (!sound_control_codec_ptr)
+		return -ENODEV;
+
+	return snprintf(buf, PAGE_SIZE, "%d %d\n",
+		snd_soc_read(sound_control_codec_ptr,
+			MSM89XX_CDC_CORE_RX1_VOL_CTL_B2_CTL),
+		snd_soc_read(sound_control_codec_ptr,
+			MSM89XX_CDC_CORE_RX2_VOL_CTL_B2_CTL));
+}
+
+static ssize_t headphone_gain_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int input_l, input_r;
+
+	if (!sound_control_codec_ptr)
+		return -ENODEV;
+
+	if (sscanf(buf, "%d %d", &input_l, &input_r) != 2)
+		return -EINVAL;
+
+	if (input_l < -10 || input_l > 20)
+		input_l = 0;
+
+	if (input_r < -10 || input_r > 20)
+		input_r = 0;
+
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_RX1_VOL_CTL_B1_CTL, input_l);
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_RX2_VOL_CTL_B1_CTL, input_r);
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_RX1_VOL_CTL_B2_CTL, input_l);
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_RX2_VOL_CTL_B2_CTL, input_r);
+
+	return count;
+}
+
+static struct kobj_attribute headphone_gain_attribute =
+	__ATTR(headphone_gain, 0664,
+		headphone_gain_show,
+		headphone_gain_store);
+
+static ssize_t speaker_gain_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	if (!sound_control_codec_ptr)
+		return -ENODEV;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+		snd_soc_read(sound_control_codec_ptr,
+			MSM89XX_CDC_CORE_RX3_VOL_CTL_B2_CTL));
+}
+
+static ssize_t speaker_gain_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int input;
+
+	if (!sound_control_codec_ptr)
+		return -ENODEV;
+
+	if (kstrtoint(buf, 10, &input))
+		return -EINVAL;
+
+	if (input < -10 || input > 20)
+		input = 0;
+
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_RX3_VOL_CTL_B1_CTL, input);
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_RX3_VOL_CTL_B2_CTL, input);
+
+	return count;
+}
+
+static struct kobj_attribute speaker_gain_attribute =
+	__ATTR(speaker_gain, 0664,
+		speaker_gain_show,
+		speaker_gain_store);
+
+static ssize_t mic_gain_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	if (!sound_control_codec_ptr)
+		return -ENODEV;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+		snd_soc_read(sound_control_codec_ptr,
+			MSM89XX_CDC_CORE_TX1_VOL_CTL_GAIN));
+}
+
+static ssize_t mic_gain_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int input;
+
+	if (!sound_control_codec_ptr)
+		return -ENODEV;
+
+	if (kstrtoint(buf, 10, &input))
+		return -EINVAL;
+
+	if (input < -10 || input > 20)
+		input = 0;
+
+	snd_soc_write(sound_control_codec_ptr,
+		MSM89XX_CDC_CORE_TX1_VOL_CTL_GAIN, input);
+
+	return count;
+}
+
+static struct kobj_attribute mic_gain_attribute =
+	__ATTR(mic_gain, 0664,
+		mic_gain_show,
+		mic_gain_store);
+
+static struct attribute *sound_control_attrs[] = {
+	&headphone_gain_attribute.attr,
+	&speaker_gain_attribute.attr,
+	&mic_gain_attribute.attr,
+	NULL,
+};
+
+static struct attribute_group sound_control_attr_group = {
+	.attrs = sound_control_attrs,
+};
+
+static struct kobject *sound_control_kobj;
+
 static int msm_dig_cdc_soc_probe(struct snd_soc_codec *codec)
 {
 	struct msm_dig_priv *msm_dig_cdc = dev_get_drvdata(codec->dev);
 	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 	int i, ret;
+
+	sound_control_codec_ptr = codec;
 
 	msm_dig_cdc->codec = codec;
 
@@ -2145,6 +2283,15 @@ static int msm_dig_cdc_probe(struct platform_device *pdev)
 				msm_codec_dais, ARRAY_SIZE(msm_codec_dais));
 	dev_dbg(&pdev->dev, "%s: registered DIG CODEC 0x%x\n",
 			__func__, dig_cdc_addr);
+
+	sound_control_kobj = kobject_create_and_add("sound_control", kernel_kobj);
+	if (!sound_control_kobj) {
+		pr_warn("%s: kobject create failed\n", __func__);
+	} else {
+		ret = sysfs_create_group(sound_control_kobj, &sound_control_attr_group);
+		if (ret)
+			pr_warn("%s: sysfs file create failed\n", __func__);
+	}
 rtn:
 	return ret;
 }
