@@ -228,6 +228,12 @@ config CPU_FREQ_GOV_CONSERVATIVE
 
 	  If in doubt, say N.
 
+config MSM_INPUT_BOOST
+	bool "Simple MSM input boost driver"
+	depends on CPU_FREQ && INPUT
+	help
+	  Simple input boost driver that boosts LP and Kryo clusters on touch.
+
 config CPU_BOOST
 	tristate "Event base short term CPU freq boost"
 	depends on CPU_FREQ
